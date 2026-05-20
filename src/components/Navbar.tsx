@@ -23,6 +23,36 @@ export default function Navbar() {
       >
         DevPath
       </Link>
+
+      <div className="flex items-center gap-6 ml-auto">
+        <Link
+          href="/how-it-works"
+          style={{
+            fontFamily: "var(--font-jetbrains-var)",
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            textDecoration: "none",
+          }}
+          className="hover:text-[var(--text-primary)] transition-colors"
+        >
+          How it works
+        </Link>
+        <Link
+          href="/generate"
+          style={{
+            fontFamily: "var(--font-jetbrains-var)",
+            backgroundColor: "var(--accent-primary)",
+            color: "#fff",
+            fontSize: 12,
+            padding: "6px 16px",
+            borderRadius: 9999,
+            textDecoration: "none",
+          }}
+          className="hover:opacity-90 transition-opacity"
+        >
+          Generate →
+        </Link>
+      </div>
     </nav>
   );
 }
