@@ -33,6 +33,14 @@ export interface PathIndexEntry {
   stageCount: number;
 }
 
+export interface BackgroundAnswers {
+  experience: string;   // e.g. "1–3 years"
+  role: string;         // e.g. "Full-stack"
+  goal: string;         // e.g. "Growing at my current job"
+  learningStyle: string; // e.g. "I learn by doing"
+  challenge?: string;   // free text, optional
+}
+
 export interface Stage {
   id: string;
   title: string;

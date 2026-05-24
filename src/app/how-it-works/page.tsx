@@ -4,22 +4,25 @@ import Navbar from "@/components/Navbar";
 const STEPS = [
   {
     number: "01",
-    title: "Get your daily.dev API token",
+    title: "Grab your two API keys",
     description:
-      "Go to app.daily.dev/settings/api and generate a Personal Access Token. This requires a daily.dev Plus subscription. Your token stays in your browser — it's never sent to our servers except to fetch your profile data.",
-    cta: { label: "Get your token →", href: "https://app.daily.dev/settings/api" },
+      "You need two keys to get started. First, go to app.daily.dev/settings/api and generate a Personal Access Token (requires a daily.dev Plus subscription). Second, grab an OpenAI API key from platform.openai.com/api-keys — DevPath uses GPT-4o on your own account so you only pay for what you generate. Both keys are stored only in your browser and never on our servers.",
+    ctas: [
+      { label: "Get daily.dev token →", href: "https://app.daily.dev/settings/api" },
+      { label: "Get OpenAI key →", href: "https://platform.openai.com/api-keys" },
+    ],
   },
   {
     number: "02",
-    title: "Choose a focus topic (optional)",
+    title: "Pick your topics and tell us about yourself",
     description:
-      "Pick up to 3 topics you want to grow in — React, System Design, DevOps, or anything custom. Leave it blank and DevPath will infer the best direction from your reading history and followed tags.",
+      "Select 1–3 topics you want to grow in — React, System Design, DevOps, or anything custom. Then answer 4 quick background questions: your experience level, role, learning goal, and preferred style. These answers are sent directly to GPT-4o so it can tailor article selection and explanations to where you actually are right now.",
   },
   {
     number: "03",
     title: "AI builds your personal path",
     description:
-      "DevPath fetches your bookmarks, followed tags, and tech stack from daily.dev. GPT-4o then selects 12–18 relevant articles and organizes them into 3–5 learning stages, ordered from foundational to advanced — with a personalized reason for each article.",
+      "DevPath fetches your bookmarks, followed tags, and tech stack from daily.dev. GPT-4o then selects 12–18 relevant articles and organizes them into 3–5 learning stages, ordered from foundational to advanced — with a personalized reason for each article based on your profile and background.",
   },
   {
     number: "04",
@@ -31,7 +34,7 @@ const STEPS = [
     number: "05",
     title: "Share your path",
     description:
-      "Every path gets a unique URL you can post on Twitter/X or LinkedIn. Note: paths are stored in your browser's local storage, so the link works best when opened in the same browser you generated it from.",
+      "Every path gets a shareable URL that works in any browser — the full path is encoded directly in the link, so anyone can open it without needing an account or the same browser. Share on Twitter/X or LinkedIn with one click.",
   },
 ];
 
@@ -49,12 +52,16 @@ const FAQS = [
     a: "Yes — the daily.dev Public API requires Plus to generate a Personal Access Token. The subscription is with daily.dev, not DevPath.",
   },
   {
+    q: "Do I need my own OpenAI API key?",
+    a: "Yes. DevPath uses GPT-4o on your own OpenAI account so you control costs and your data never passes through our servers. A typical path generation costs a few cents.",
+  },
+  {
     q: "What model powers the path generation?",
-    a: "OpenAI GPT-4o with JSON mode, which guarantees a structured, parseable response every time.",
+    a: "OpenAI GPT-4o with JSON mode, which guarantees a structured, parseable response every time. Your background answers are included in the prompt so the model can personalise article selection and explanations.",
   },
   {
     q: "Can I share my path with someone else?",
-    a: "You can share the URL, but the recipient will only see the path if they open it in the same browser where it was generated. Cross-device sharing is a planned feature.",
+    a: "Yes — shared links work in any browser. The full path is compressed and encoded into the URL itself, so the recipient can open it without an account or the same browser.",
   },
 ];
 
@@ -147,26 +154,31 @@ export default function HowItWorksPage() {
                       fontFamily: "var(--font-jetbrains-var)",
                       fontSize: 13,
                       lineHeight: 1.7,
-                      marginBottom: step.cta ? 12 : 0,
+                      marginBottom: step.ctas ? 12 : 0,
                     }}
                   >
                     {step.description}
                   </p>
-                  {step.cta && (
-                    <a
-                      href={step.cta.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "var(--accent-primary)",
-                        fontFamily: "var(--font-jetbrains-var)",
-                        fontSize: 12,
-                        textDecoration: "none",
-                      }}
-                      className="hover:opacity-75 transition-opacity"
-                    >
-                      {step.cta.label}
-                    </a>
+                  {step.ctas && (
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      {step.ctas.map((cta) => (
+                        <a
+                          key={cta.href}
+                          href={cta.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "var(--accent-primary)",
+                            fontFamily: "var(--font-jetbrains-var)",
+                            fontSize: 12,
+                            textDecoration: "none",
+                          }}
+                          className="hover:opacity-75 transition-opacity"
+                        >
+                          {cta.label}
+                        </a>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

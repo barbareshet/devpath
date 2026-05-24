@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import type { UserProfile, CandidateArticle } from "@/types";
+import type { UserProfile, CandidateArticle, BackgroundAnswers } from "@/types";
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export function createOpenAIClient(apiKey: string): OpenAI {
+  return new OpenAI({ apiKey });
+}
 
 export function buildSystemPrompt(): string {
   return `You are DevPath, an intelligent learning path curator for software developers.
@@ -23,7 +23,8 @@ Respond ONLY with valid JSON matching the specified structure.`;
 export function buildUserPrompt(
   profile: UserProfile,
   candidates: CandidateArticle[],
-  topicOverride?: string
+  topicOverride?: string,
+  background?: BackgroundAnswers
 ): string {
   const bookmarkSet = new Set(profile.bookmarkIds);
 
@@ -37,13 +38,23 @@ export function buildUserPrompt(
     isBookmarked: bookmarkSet.has(a.id),
   }));
 
+  const backgroundSection = background
+    ? `
+Developer Background (self-reported):
+- Experience: ${background.experience}
+- Primary Role: ${background.role}
+- Learning Goal: ${background.goal}
+- Learning Style: ${background.learningStyle}${background.challenge ? `\n- Biggest Challenge: ${background.challenge}` : ""}
+`
+    : "";
+
   return `Developer Profile:
 - Username: @${profile.username}
 - Bio: ${profile.bio ?? "Not provided"}
 - Tech Stack: ${profile.techStack.join(", ") || "Not specified"}
 - Followed Tags: ${profile.followedTags.join(", ") || "Not specified"}
 - Bookmarked Article IDs: ${profile.bookmarkIds.join(", ") || "None"}
-${topicOverride ? `- Focus Topic: ${topicOverride}\n` : ""}
+${topicOverride ? `- Focus Topic: ${topicOverride}\n` : ""}${backgroundSection}
 Article Pool (${candidates.length} articles):
 ${JSON.stringify(articleList, null, 2)}
 

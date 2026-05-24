@@ -1,21 +1,24 @@
 "use server";
 
-import { openai, buildSystemPrompt, buildUserPrompt } from "@/lib/openai";
+import { createOpenAIClient, buildSystemPrompt, buildUserPrompt } from "@/lib/openai";
 import { generateSlug } from "@/lib/slugify";
-import type { UserProfile, CandidateArticle, GeneratedPath } from "@/types";
+import type { UserProfile, CandidateArticle, GeneratedPath, BackgroundAnswers } from "@/types";
 
 export async function generatePath(
   profile: UserProfile,
   candidates: CandidateArticle[],
-  topicOverride?: string
+  openaiKey: string,
+  topicOverride?: string,
+  background?: BackgroundAnswers
 ): Promise<{ slug: string; path: GeneratedPath }> {
+  const openai = createOpenAIClient(openaiKey);
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     max_tokens: 4000,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: buildSystemPrompt() },
-      { role: "user", content: buildUserPrompt(profile, candidates, topicOverride) },
+      { role: "user", content: buildUserPrompt(profile, candidates, topicOverride, background) },
     ],
   });
 

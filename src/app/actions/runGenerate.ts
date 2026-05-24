@@ -2,11 +2,13 @@
 
 import { buildCandidatePool } from "@/lib/dailydev";
 import { generatePath } from "./generatePath";
-import type { GeneratedPath } from "@/types";
+import type { GeneratedPath, BackgroundAnswers } from "@/types";
 
 export async function runGenerate(
   token: string,
-  topicOverride?: string
+  openaiKey: string,
+  topicOverride?: string,
+  background?: BackgroundAnswers
 ): Promise<{ slug: string; path: GeneratedPath }> {
   const { profile, candidates } = await buildCandidatePool(token);
 
@@ -16,5 +18,5 @@ export async function runGenerate(
     );
   }
 
-  return generatePath(profile, candidates, topicOverride);
+  return generatePath(profile, candidates, openaiKey, topicOverride, background);
 }
