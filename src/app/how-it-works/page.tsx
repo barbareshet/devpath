@@ -14,27 +14,34 @@ const STEPS = [
   },
   {
     number: "02",
-    title: "Pick your topics and tell us about yourself",
+    title: "Set up your profile once",
     description:
-      "Select 1–3 topics you want to grow in — React, System Design, DevOps, or anything custom. Then answer 4 quick background questions: your experience level, role, learning goal, and preferred style. These answers are sent directly to GPT-4o so it can tailor article selection and explanations to where you actually are right now.",
+      "Head to your Profile page and answer 4 quick questions: your experience level, primary role, learning goal, and preferred style. You can also describe what you're currently struggling with. These answers are saved in your browser and automatically included in every path you generate — you never have to answer them again. Update them anytime as you grow.",
+    ctas: [{ label: "Set up your profile →", href: "/profile" }],
   },
   {
     number: "03",
-    title: "AI builds your personal path",
+    title: "Pick your topics — or let AI suggest",
     description:
-      "DevPath fetches your bookmarks, followed tags, and tech stack from daily.dev. GPT-4o then selects 12–18 relevant articles and organizes them into 3–5 learning stages, ordered from foundational to advanced — with a personalized reason for each article based on your profile and background.",
+      "On the Generate page, enter your API keys and either select 1–3 topics manually (React, System Design, DevOps, or anything custom) or click \"Suggest paths for me\". The suggestion feature fetches your bookmarks and followed tags, then asks GPT-4o to recommend 3 distinct, personalised path topics based on what you've actually been reading. One click on \"Take →\" and your path starts building.",
   },
   {
     number: "04",
-    title: "Work through your stages",
+    title: "AI builds your personal path",
     description:
-      "Each article has an [→ Open] link that takes you directly to the post on daily.dev. Mark articles as read as you go — your progress is saved in your browser and visualized with a circuit-line sidebar.",
+      "DevPath fetches your bookmarks, followed tags, and tech stack from daily.dev. GPT-4o selects 12–18 relevant articles and organises them into 3–5 learning stages, ordered from foundational to advanced — with a personalised reason for each article that references your actual stack, tags, and profile background.",
   },
   {
     number: "05",
+    title: "Work through your stages",
+    description:
+      "Each article has an [→ Open] link that takes you directly to the post on daily.dev. Mark articles as read as you go — your progress is saved in your browser and visualised with a circuit-line sidebar. All your generated paths are accessible from the My Paths page, with per-path completion percentages so you can pick up where you left off.",
+  },
+  {
+    number: "06",
     title: "Share your path",
     description:
-      "Every path gets a shareable URL that works in any browser — the full path is encoded directly in the link, so anyone can open it without needing an account or the same browser. Share on Twitter/X or LinkedIn with one click.",
+      "Every path gets a shareable URL that works in any browser — the full path is compressed and encoded directly into the link, so anyone can open it without an account or the same browser. Share to Twitter/X or LinkedIn with one click.",
   },
 ];
 
@@ -44,8 +51,16 @@ const FAQS = [
     a: "Your daily.dev bookmarks, followed tags, and tech stack — fetched once per generation using your PAT. DevPath never stores this data on a server.",
   },
   {
-    q: "Where are my paths stored?",
-    a: "Entirely in your browser's localStorage. There's no database. Clearing your browser data will remove your paths.",
+    q: "Where are my paths and profile stored?",
+    a: "Entirely in your browser's localStorage. There's no database. Your profile answers, generated paths, and reading progress all live in your browser — clearing browser data will remove them.",
+  },
+  {
+    q: "Do I have to fill in my profile every time?",
+    a: "No. Your profile (experience, role, goal, learning style) is saved once and automatically applied to every path you generate. You only need to update it when something changes.",
+  },
+  {
+    q: "What does the \"Suggest paths for me\" feature do?",
+    a: "It fetches your bookmarks and followed tags from daily.dev, then makes a lightweight GPT-4o call to suggest 3 personalised path topics based on what you've actually been reading. Clicking \"Take →\" immediately generates the full path for that topic.",
   },
   {
     q: "Do I need a daily.dev Plus subscription?",
@@ -57,7 +72,7 @@ const FAQS = [
   },
   {
     q: "What model powers the path generation?",
-    a: "OpenAI GPT-4o with JSON mode, which guarantees a structured, parseable response every time. Your background answers are included in the prompt so the model can personalise article selection and explanations.",
+    a: "OpenAI GPT-4o with JSON mode, which guarantees a structured, parseable response every time. Your profile background is included in the prompt so the model can personalise article selection and explanations.",
   },
   {
     q: "Can I share my path with someone else?",
@@ -162,21 +177,37 @@ export default function HowItWorksPage() {
                   {step.ctas && (
                     <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                       {step.ctas.map((cta) => (
-                        <a
-                          key={cta.href}
-                          href={cta.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            color: "var(--accent-primary)",
-                            fontFamily: "var(--font-jetbrains-var)",
-                            fontSize: 12,
-                            textDecoration: "none",
-                          }}
-                          className="hover:opacity-75 transition-opacity"
-                        >
-                          {cta.label}
-                        </a>
+                        cta.href.startsWith("/") ? (
+                          <Link
+                            key={cta.href}
+                            href={cta.href}
+                            style={{
+                              color: "var(--accent-primary)",
+                              fontFamily: "var(--font-jetbrains-var)",
+                              fontSize: 12,
+                              textDecoration: "none",
+                            }}
+                            className="hover:opacity-75 transition-opacity"
+                          >
+                            {cta.label}
+                          </Link>
+                        ) : (
+                          <a
+                            key={cta.href}
+                            href={cta.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: "var(--accent-primary)",
+                              fontFamily: "var(--font-jetbrains-var)",
+                              fontSize: 12,
+                              textDecoration: "none",
+                            }}
+                            className="hover:opacity-75 transition-opacity"
+                          >
+                            {cta.label}
+                          </a>
+                        )
                       ))}
                     </div>
                   )}

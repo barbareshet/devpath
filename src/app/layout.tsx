@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Syne, JetBrains_Mono } from "next/font/google";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 const syne = Syne({
@@ -32,6 +33,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col antialiased">
         {children}
+        <Footer />
       </body>
     </html>
   );

@@ -38,6 +38,30 @@ export default function Navbar() {
           How it works
         </Link>
         <Link
+          href="/my-paths"
+          style={{
+            fontFamily: "var(--font-jetbrains-var)",
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            textDecoration: "none",
+          }}
+          className="hover:text-[var(--text-primary)] transition-colors"
+        >
+          My Paths
+        </Link>
+        <Link
+          href="/profile"
+          style={{
+            fontFamily: "var(--font-jetbrains-var)",
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            textDecoration: "none",
+          }}
+          className="hover:text-[var(--text-primary)] transition-colors"
+        >
+          Profile
+        </Link>
+        <Link
           href="/generate"
           style={{
             fontFamily: "var(--font-jetbrains-var)",

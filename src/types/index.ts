@@ -41,6 +41,12 @@ export interface BackgroundAnswers {
   challenge?: string;   // free text, optional
 }
 
+export interface PathSuggestion {
+  topic: string;       // e.g. "React Performance & Rendering"
+  description: string; // 1–2 sentences, why it fits this developer
+  emoji: string;       // single emoji
+}
+
 export interface Stage {
   id: string;
   title: string;

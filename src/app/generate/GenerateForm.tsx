@@ -2,47 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import LoadingMessages from "@/components/LoadingMessages";
 import { runGenerate } from "@/app/actions/runGenerate";
+import { suggestPaths } from "@/app/actions/suggestPaths";
 import { savePath, addToPathIndex, encodePathForUrl } from "@/lib/storage";
-import type { BackgroundAnswers } from "@/types";
+import type { BackgroundAnswers, PathSuggestion } from "@/types";
 
 const PAT_STORAGE_KEY = "devpath:pat";
 const OPENAI_KEY_STORAGE_KEY = "devpath:openai-key";
+const BACKGROUND_STORAGE_KEY = "devpath:background";
 const MAX_TOPICS = 3;
-
-const BG_QUESTIONS = [
-  {
-    key: "experience" as const,
-    label: "How long have you been coding?",
-    options: ["< 1 year", "1–3 years", "3–7 years", "7+ years"],
-  },
-  {
-    key: "role" as const,
-    label: "What's your primary role?",
-    options: ["Frontend", "Backend", "Full-stack", "DevOps / SRE", "Data / ML / AI", "Other"],
-  },
-  {
-    key: "goal" as const,
-    label: "What's driving your learning right now?",
-    options: [
-      "Interview prep / job search",
-      "Growing at my current job",
-      "Building a side project",
-      "Learning for fun",
-    ],
-  },
-  {
-    key: "learningStyle" as const,
-    label: "How do you learn best?",
-    options: [
-      "Step-by-step structured guides",
-      "Deep dives and technical articles",
-      "Tutorials I can code along with",
-      "Understanding the 'why' behind things",
-    ],
-  },
-];
 
 const SUGGESTED_TOPICS = [
   "React",
@@ -75,27 +45,31 @@ export default function GenerateForm({
   defaultTopic = "",
 }: GenerateFormProps) {
   const router = useRouter();
-  const [step, setStep] = useState<1 | 2>(1);
   const [token, setToken] = useState(defaultToken);
   const [openaiKey, setOpenaiKey] = useState(defaultOpenAIKey);
   const [selected, setSelected] = useState<string[]>(
     defaultTopic ? [defaultTopic] : []
   );
   const [customTopic, setCustomTopic] = useState("");
-  const [background, setBackground] = useState<Partial<BackgroundAnswers>>({});
-  const [challenge, setChallenge] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [hasProfile, setHasProfile] = useState(false);
   const customInputRef = useRef<HTMLInputElement>(null);
+
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<PathSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState("");
+  const [loadingSuggestion, setLoadingSuggestion] = useState<string | null>(null);
 
   useEffect(() => {
     const savedPat = localStorage.getItem(PAT_STORAGE_KEY);
     if (savedPat) setToken(savedPat);
     const savedOpenAI = localStorage.getItem(OPENAI_KEY_STORAGE_KEY);
     if (savedOpenAI) setOpenaiKey(savedOpenAI);
+    setHasProfile(!!localStorage.getItem(BACKGROUND_STORAGE_KEY));
   }, []);
 
-  // Focus custom input when "Other" is selected
   useEffect(() => {
     if (selected.includes("Other")) {
       customInputRef.current?.focus();
@@ -105,59 +79,43 @@ export default function GenerateForm({
   function toggleTopic(t: string) {
     setSelected((prev) => {
       if (prev.includes(t)) {
-        // Deselect
         if (t === "Other") setCustomTopic("");
         return prev.filter((x) => x !== t);
       }
-      // Select — enforce max
       if (prev.length >= MAX_TOPICS) return prev;
       return [...prev, t];
     });
   }
 
   function buildTopicString(): string {
-    const parts = selected
+    return selected
       .map((t) => (t === "Other" ? customTopic.trim() : t))
-      .filter(Boolean);
-    return parts.join(", ");
+      .filter(Boolean)
+      .join(", ");
   }
 
-  function handleNextStep() {
+  function loadBackground(): BackgroundAnswers | undefined {
+    const raw = localStorage.getItem(BACKGROUND_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as BackgroundAnswers) : undefined;
+  }
+
+  async function handleGenerate() {
     if (!token.trim()) { setError("Please enter your daily.dev API token."); return; }
     if (!openaiKey.trim()) { setError("Please enter your OpenAI API key."); return; }
     if (selected.length === 0) { setError("Please select at least one focus topic."); return; }
     if (selected.includes("Other") && !customTopic.trim()) { setError("Please describe your custom topic."); return; }
-    setError("");
-    setStep(2);
-  }
-
-  async function handleGenerate() {
-    const unanswered = BG_QUESTIONS.find((q) => !background[q.key]);
-    if (unanswered) {
-      setError(`Please answer: "${unanswered.label}"`);
-      return;
-    }
 
     setError("");
     setLoading(true);
 
-    const fullBackground: BackgroundAnswers = {
-      experience: background.experience!,
-      role: background.role!,
-      goal: background.goal!,
-      learningStyle: background.learningStyle!,
-      challenge: challenge.trim() || undefined,
-    };
-
     try {
       localStorage.setItem(PAT_STORAGE_KEY, token.trim());
       localStorage.setItem(OPENAI_KEY_STORAGE_KEY, openaiKey.trim());
-      const topicString = buildTopicString();
       const { slug, path } = await runGenerate(
         token.trim(),
         openaiKey.trim(),
-        topicString || undefined,
-        fullBackground
+        buildTopicString() || undefined,
+        loadBackground()
       );
       savePath(slug, path);
       addToPathIndex({
@@ -167,13 +125,53 @@ export default function GenerateForm({
         articleCount: path.stages.flatMap((s) => s.articles).length,
         stageCount: path.stages.length,
       });
-      const encoded = encodePathForUrl(path);
-      router.push(`/path/${slug}?d=${encoded}`);
+      router.push(`/path/${slug}?d=${encodePathForUrl(path)}`);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Something went wrong. Please try again."
-      );
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       setLoading(false);
+    }
+  }
+
+  async function handleSuggest() {
+    if (!token.trim() || !openaiKey.trim()) {
+      setSuggestionsError("Enter both your daily.dev token and OpenAI key first.");
+      return;
+    }
+    setSuggestionsError("");
+    setSuggestionsLoading(true);
+    setSuggestions([]);
+    try {
+      localStorage.setItem(PAT_STORAGE_KEY, token.trim());
+      localStorage.setItem(OPENAI_KEY_STORAGE_KEY, openaiKey.trim());
+      setSuggestions(await suggestPaths(token.trim(), openaiKey.trim()));
+    } catch (err) {
+      setSuggestionsError(
+        err instanceof Error ? err.message : "Could not load suggestions. Please try again."
+      );
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }
+
+  async function handleTakeSuggestion(topic: string) {
+    setLoadingSuggestion(topic);
+    setError("");
+    try {
+      localStorage.setItem(PAT_STORAGE_KEY, token.trim());
+      localStorage.setItem(OPENAI_KEY_STORAGE_KEY, openaiKey.trim());
+      const { slug, path } = await runGenerate(token.trim(), openaiKey.trim(), topic, loadBackground());
+      savePath(slug, path);
+      addToPathIndex({
+        slug,
+        pathTitle: path.pathTitle,
+        createdAt: new Date().toISOString(),
+        articleCount: path.stages.flatMap((s) => s.articles).length,
+        stageCount: path.stages.length,
+      });
+      router.push(`/path/${slug}?d=${encodePathForUrl(path)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setLoadingSuggestion(null);
     }
   }
 
@@ -198,48 +196,7 @@ export default function GenerateForm({
   };
 
   const remaining = MAX_TOPICS - selected.length;
-
-  const stepIndicator = (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        marginBottom: 32,
-        fontFamily: "var(--font-jetbrains-var)",
-        fontSize: 11,
-      }}
-    >
-      {[1, 2].map((n) => (
-        <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: step >= n ? "var(--accent-primary)" : "var(--bg-elevated)",
-              border: `1px solid ${step >= n ? "var(--accent-primary)" : "var(--border)"}`,
-              color: step >= n ? "#fff" : "var(--text-muted)",
-              fontSize: 10,
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {n}
-          </span>
-          <span style={{ color: step === n ? "var(--text-primary)" : "var(--text-muted)" }}>
-            {n === 1 ? "Setup" : "About you"}
-          </span>
-          {n < 2 && (
-            <span style={{ color: "var(--border)", marginLeft: 0 }}>——</span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+  const canSuggest = token.trim().length > 0 && openaiKey.trim().length > 0;
 
   const errorBlock = error && (
     <p
@@ -257,6 +214,34 @@ export default function GenerateForm({
     </p>
   );
 
+  // Full-page loading state when taking a suggestion
+  if (loadingSuggestion) {
+    return (
+      <div style={{ width: "100%", maxWidth: 520 }}>
+        <div style={{ marginBottom: 32 }}>
+          <h1
+            style={{
+              fontFamily: "var(--font-syne-var)",
+              color: "var(--text-primary)",
+              fontSize: 32,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              marginBottom: 8,
+            }}
+          >
+            Building Your Path
+          </h1>
+          <p style={{ color: "var(--text-secondary)", fontFamily: "var(--font-jetbrains-var)", fontSize: 13, lineHeight: 1.6 }}>
+            Curating articles for{" "}
+            <span style={{ color: "var(--accent-primary)" }}>{loadingSuggestion}</span>…
+          </p>
+        </div>
+        <LoadingMessages />
+        {errorBlock}
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: "100%", maxWidth: 520 }}>
       {/* Header */}
@@ -273,264 +258,303 @@ export default function GenerateForm({
         >
           Generate Your Path
         </h1>
-        <p
-          style={{
-            color: "var(--text-secondary)",
-            fontFamily: "var(--font-jetbrains-var)",
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}
-        >
-          {step === 1
-            ? "Connect your daily.dev profile and pick your focus topics."
-            : "A few quick questions so the AI can tailor your path."}
+        <p style={{ color: "var(--text-secondary)", fontFamily: "var(--font-jetbrains-var)", fontSize: 13, lineHeight: 1.6 }}>
+          Connect your daily.dev profile and pick your focus topics.
         </p>
       </div>
 
-      {stepIndicator}
-
-      {/* ── Step 1: credentials + topics ── */}
-      {step === 1 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* PAT input */}
-          <div>
-            <label style={labelStyle}>
-              daily.dev API Token{" "}
-              <span style={{ color: "var(--text-muted)" }}>(required)</span>
-            </label>
-            <input
-              type="password"
-              placeholder="dda_xxxxxxxxxxxxxxxxxxxx"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              style={inputStyle}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 6 }}>
-              Get yours at{" "}
-              <a href="https://app.daily.dev/settings/api" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-primary)" }}>
-                app.daily.dev/settings/api
-              </a>{" "}
-              — requires Plus subscription.
-            </p>
-          </div>
-
-          {/* OpenAI key */}
-          <div>
-            <label style={labelStyle}>
-              OpenAI API Key{" "}
-              <span style={{ color: "var(--text-muted)" }}>(required)</span>
-            </label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={openaiKey}
-              onChange={(e) => setOpenaiKey(e.target.value)}
-              style={inputStyle}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 6 }}>
-              Get yours at{" "}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-primary)" }}>
-                platform.openai.com/api-keys
-              </a>
-              . Stored only in your browser.
-            </p>
-          </div>
-
-          {/* Topic multi-select */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-              <label style={{ ...labelStyle, marginBottom: 0 }}>
-                Focus topics{" "}
-                <span style={{ color: "var(--text-muted)" }}>(required, up to 3)</span>
-              </label>
-              {selected.length > 0 && (
-                <span style={{ color: remaining === 0 ? "var(--accent-yellow)" : "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, transition: "color 150ms" }}>
-                  {remaining === 0 ? "Max reached" : `${remaining} left`}
-                </span>
-              )}
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {SUGGESTED_TOPICS.map((t) => {
-                const isSelected = selected.includes(t);
-                const isDisabled = !isSelected && remaining === 0;
-                const isOther = t === "Other";
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    disabled={isDisabled}
-                    onClick={() => toggleTopic(t)}
-                    style={{
-                      backgroundColor: isSelected ? (isOther ? "var(--accent-yellow)" : "var(--accent-primary)") : "var(--bg-elevated)",
-                      border: `1px solid ${isSelected ? (isOther ? "var(--accent-yellow)" : "var(--accent-primary)") : "var(--border)"}`,
-                      color: isSelected ? (isOther ? "var(--bg-base)" : "#fff") : isDisabled ? "var(--text-muted)" : "var(--text-secondary)",
-                      fontFamily: "var(--font-jetbrains-var)",
-                      fontSize: 12,
-                      padding: "5px 12px",
-                      borderRadius: 9999,
-                      cursor: isDisabled ? "not-allowed" : "pointer",
-                      opacity: isDisabled ? 0.45 : 1,
-                      transition: "background 150ms ease, border-color 150ms ease, color 150ms ease",
-                    }}
-                  >
-                    {isOther ? "✏ Other" : t}
-                    {isSelected && !isOther && <span style={{ marginLeft: 5, opacity: 0.7 }}>×</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {selected.includes("Other") && (
-              <div style={{ marginTop: 12 }}>
-                <input
-                  ref={customInputRef}
-                  type="text"
-                  placeholder="Describe your topic, e.g. WebAssembly, tRPC, edge computing..."
-                  value={customTopic}
-                  onChange={(e) => setCustomTopic(e.target.value)}
-                  style={{ ...inputStyle, borderColor: "var(--accent-yellow)" }}
-                />
-              </div>
-            )}
-
-            {selected.length > 0 && (
-              <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 10 }}>
-                Focused on: <span style={{ color: "var(--text-secondary)" }}>{buildTopicString() || "…"}</span>
-              </p>
-            )}
-          </div>
-
-          {errorBlock}
-
-          <button
-            onClick={handleNextStep}
+      {/* No profile banner */}
+      {!hasProfile && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "10px 14px",
+            backgroundColor: "rgba(139,92,246,0.08)",
+            border: "1px solid rgba(139,92,246,0.25)",
+            borderRadius: 8,
+            marginBottom: 24,
+          }}
+        >
+          <p style={{ fontFamily: "var(--font-jetbrains-var)", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            Set your profile once for better-tailored paths.
+          </p>
+          <Link
+            href="/profile"
             style={{
-              background: "var(--accent-primary)",
-              color: "#fff",
               fontFamily: "var(--font-jetbrains-var)",
-              fontSize: 14,
-              fontWeight: 500,
-              padding: "12px 24px",
-              borderRadius: 9999,
-              border: "none",
-              cursor: "pointer",
-              width: "100%",
+              fontSize: 12,
+              color: "var(--accent-primary)",
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
-            className="hover:opacity-90"
           >
-            Next: About you →
-          </button>
+            Set up →
+          </Link>
         </div>
       )}
 
-      {/* ── Step 2: background questions ── */}
-      {step === 2 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-          {BG_QUESTIONS.map((q) => (
-            <div key={q.key}>
-              <p style={{ fontFamily: "var(--font-syne-var)", color: "var(--text-primary)", fontSize: 14, fontWeight: 700, marginBottom: 10 }}>
-                {q.label}
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        {/* PAT input */}
+        <div>
+          <label style={labelStyle}>
+            daily.dev API Token{" "}
+            <span style={{ color: "var(--text-muted)" }}>(required)</span>
+          </label>
+          <input
+            type="password"
+            placeholder="dda_xxxxxxxxxxxxxxxxxxxx"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            style={inputStyle}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 6 }}>
+            Get yours at{" "}
+            <a href="https://app.daily.dev/settings/api" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-primary)" }}>
+              app.daily.dev/settings/api
+            </a>{" "}
+            — requires Plus subscription.
+          </p>
+        </div>
+
+        {/* OpenAI key */}
+        <div>
+          <label style={labelStyle}>
+            OpenAI API Key{" "}
+            <span style={{ color: "var(--text-muted)" }}>(required)</span>
+          </label>
+          <input
+            type="password"
+            placeholder="sk-..."
+            value={openaiKey}
+            onChange={(e) => setOpenaiKey(e.target.value)}
+            style={inputStyle}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 6 }}>
+            Get yours at{" "}
+            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent-primary)" }}>
+              platform.openai.com/api-keys
+            </a>
+            . Stored only in your browser.
+          </p>
+        </div>
+
+        {/* ── Suggest paths section ── */}
+        <div style={{ borderRadius: 10, border: "1px solid var(--border)", overflow: "hidden" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 16px",
+              backgroundColor: "var(--bg-elevated)",
+              borderBottom: suggestions.length > 0 || suggestionsLoading ? "1px solid var(--border)" : "none",
+            }}
+          >
+            <div>
+              <p style={{ fontFamily: "var(--font-syne-var)", color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 2 }}>
+                ✦ Suggest paths for me
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {q.options.map((opt) => {
-                  const isSelected = background[q.key] === opt;
-                  return (
-                    <button
-                      key={opt}
-                      type="button"
-                      disabled={loading}
-                      onClick={() => setBackground((prev) => ({ ...prev, [q.key]: opt }))}
-                      style={{
-                        textAlign: "left",
-                        backgroundColor: isSelected ? "rgba(139,92,246,0.12)" : "var(--bg-surface)",
-                        border: `1px solid ${isSelected ? "var(--accent-primary)" : "var(--border)"}`,
-                        borderRadius: 6,
-                        color: isSelected ? "var(--accent-primary)" : "var(--text-secondary)",
-                        fontFamily: "var(--font-jetbrains-var)",
-                        fontSize: 13,
-                        padding: "9px 14px",
-                        cursor: "pointer",
-                        transition: "border-color 150ms ease, color 150ms ease, background 150ms ease",
-                      }}
-                    >
-                      {isSelected && <span style={{ marginRight: 8 }}>✓</span>}
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
+              <p style={{ fontFamily: "var(--font-jetbrains-var)", color: "var(--text-muted)", fontSize: 11 }}>
+                AI picks 3 topics based on your actual bookmarks & tags
+              </p>
             </div>
-          ))}
-
-          {/* Optional free-text challenge */}
-          <div>
-            <p style={{ fontFamily: "var(--font-syne-var)", color: "var(--text-primary)", fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
-              What are you struggling with most?{" "}
-              <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 12 }}>(optional)</span>
-            </p>
-            <textarea
-              placeholder="e.g. I keep getting lost in async patterns, or I struggle with system design interviews..."
-              value={challenge}
-              onChange={(e) => setChallenge(e.target.value)}
-              disabled={loading}
-              rows={3}
-              style={{
-                ...inputStyle,
-                resize: "vertical",
-                lineHeight: 1.6,
-              }}
-            />
-          </div>
-
-          {errorBlock}
-          {loading && <LoadingMessages />}
-
-          <div style={{ display: "flex", gap: 10 }}>
             <button
-              onClick={() => { setStep(1); setError(""); }}
-              disabled={loading}
+              type="button"
+              onClick={handleSuggest}
+              disabled={!canSuggest || suggestionsLoading}
               style={{
-                background: "var(--bg-elevated)",
-                color: "var(--text-secondary)",
+                backgroundColor: canSuggest && !suggestionsLoading ? "var(--accent-primary)" : "var(--bg-surface)",
+                border: `1px solid ${canSuggest && !suggestionsLoading ? "var(--accent-primary)" : "var(--border)"}`,
+                color: canSuggest && !suggestionsLoading ? "#fff" : "var(--text-muted)",
                 fontFamily: "var(--font-jetbrains-var)",
-                fontSize: 14,
-                padding: "12px 20px",
-                borderRadius: 9999,
-                border: "1px solid var(--border)",
-                cursor: loading ? "not-allowed" : "pointer",
-                flexShrink: 0,
-              }}
-            >
-              ← Back
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={loading}
-              style={{
-                flex: 1,
-                background: loading ? "var(--bg-elevated)" : "var(--accent-primary)",
-                color: loading ? "var(--text-muted)" : "#fff",
-                fontFamily: "var(--font-jetbrains-var)",
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: 500,
-                padding: "12px 24px",
+                padding: "7px 14px",
                 borderRadius: 9999,
-                border: "none",
-                cursor: loading ? "not-allowed" : "pointer",
-                transition: "background 200ms ease",
+                cursor: canSuggest && !suggestionsLoading ? "pointer" : "not-allowed",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                transition: "all 150ms ease",
               }}
-              className={loading ? "" : "hover:opacity-90"}
             >
-              {loading ? "Generating..." : "Generate My Learning Path →"}
+              {suggestionsLoading ? "Loading…" : suggestions.length > 0 ? "Refresh ↺" : "Suggest →"}
             </button>
           </div>
+
+          {suggestionsError && (
+            <p style={{ color: "#F87171", fontFamily: "var(--font-jetbrains-var)", fontSize: 12, padding: "10px 16px", backgroundColor: "rgba(248, 113, 113, 0.06)" }}>
+              {suggestionsError}
+            </p>
+          )}
+
+          {suggestionsLoading && (
+            <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {[1, 2, 3].map((i) => (
+                <div key={i} style={{ height: 64, borderRadius: 8, backgroundColor: "var(--bg-surface)", opacity: 1 - i * 0.15 }} />
+              ))}
+            </div>
+          )}
+
+          {suggestions.length > 0 && !suggestionsLoading && (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {suggestions.map((s, i) => (
+                <div
+                  key={s.topic}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    padding: "14px 16px",
+                    borderBottom: i < suggestions.length - 1 ? "1px solid var(--border)" : "none",
+                    backgroundColor: "var(--bg-surface)",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start", flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 20, flexShrink: 0, lineHeight: 1.4 }}>{s.emoji}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: "var(--font-syne-var)", color: "var(--text-primary)", fontSize: 13, fontWeight: 700, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {s.topic}
+                      </p>
+                      <p style={{ fontFamily: "var(--font-jetbrains-var)", color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
+                        {s.description}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleTakeSuggestion(s.topic)}
+                    style={{
+                      backgroundColor: "var(--bg-elevated)",
+                      border: "1px solid var(--border)",
+                      color: "var(--accent-primary)",
+                      fontFamily: "var(--font-jetbrains-var)",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: "6px 12px",
+                      borderRadius: 9999,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      transition: "border-color 150ms ease, background 150ms ease",
+                    }}
+                    className="hover:opacity-90"
+                  >
+                    Take →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, height: 1, backgroundColor: "var(--border)" }} />
+          <span style={{ fontFamily: "var(--font-jetbrains-var)", fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+            or choose your own topic
+          </span>
+          <div style={{ flex: 1, height: 1, backgroundColor: "var(--border)" }} />
+        </div>
+
+        {/* Topic multi-select */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>
+              Focus topics{" "}
+              <span style={{ color: "var(--text-muted)" }}>(required, up to 3)</span>
+            </label>
+            {selected.length > 0 && (
+              <span style={{ color: remaining === 0 ? "var(--accent-yellow)" : "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, transition: "color 150ms" }}>
+                {remaining === 0 ? "Max reached" : `${remaining} left`}
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {SUGGESTED_TOPICS.map((t) => {
+              const isSelected = selected.includes(t);
+              const isDisabled = !isSelected && remaining === 0;
+              const isOther = t === "Other";
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => toggleTopic(t)}
+                  style={{
+                    backgroundColor: isSelected ? (isOther ? "var(--accent-yellow)" : "var(--accent-primary)") : "var(--bg-elevated)",
+                    border: `1px solid ${isSelected ? (isOther ? "var(--accent-yellow)" : "var(--accent-primary)") : "var(--border)"}`,
+                    color: isSelected ? (isOther ? "var(--bg-base)" : "#fff") : isDisabled ? "var(--text-muted)" : "var(--text-secondary)",
+                    fontFamily: "var(--font-jetbrains-var)",
+                    fontSize: 12,
+                    padding: "5px 12px",
+                    borderRadius: 9999,
+                    cursor: isDisabled ? "not-allowed" : "pointer",
+                    opacity: isDisabled ? 0.45 : 1,
+                    transition: "background 150ms ease, border-color 150ms ease, color 150ms ease",
+                  }}
+                >
+                  {isOther ? "✏ Other" : t}
+                  {isSelected && !isOther && <span style={{ marginLeft: 5, opacity: 0.7 }}>×</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {selected.includes("Other") && (
+            <div style={{ marginTop: 12 }}>
+              <input
+                ref={customInputRef}
+                type="text"
+                placeholder="Describe your topic, e.g. WebAssembly, tRPC, edge computing..."
+                value={customTopic}
+                onChange={(e) => setCustomTopic(e.target.value)}
+                style={{ ...inputStyle, borderColor: "var(--accent-yellow)" }}
+              />
+            </div>
+          )}
+
+          {selected.length > 0 && (
+            <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-jetbrains-var)", fontSize: 11, marginTop: 10 }}>
+              Focused on: <span style={{ color: "var(--text-secondary)" }}>{buildTopicString() || "…"}</span>
+            </p>
+          )}
+        </div>
+
+        {errorBlock}
+
+        {loading && <LoadingMessages />}
+
+        <button
+          onClick={handleGenerate}
+          disabled={loading}
+          style={{
+            background: loading ? "var(--bg-elevated)" : "var(--accent-primary)",
+            color: loading ? "var(--text-muted)" : "#fff",
+            fontFamily: "var(--font-jetbrains-var)",
+            fontSize: 14,
+            fontWeight: 500,
+            padding: "12px 24px",
+            borderRadius: 9999,
+            border: "none",
+            cursor: loading ? "not-allowed" : "pointer",
+            width: "100%",
+            transition: "background 200ms ease",
+          }}
+          className={loading ? "" : "hover:opacity-90"}
+        >
+          {loading ? "Generating..." : "Generate My Learning Path →"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -17,7 +17,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export default function MyPaths() {
+export default function MyPaths({ hideHeader = false }: { hideHeader?: boolean }) {
   const router = useRouter();
   const [entries, setEntries] = useState<PathIndexEntry[]>([]);
   const [progress, setProgress] = useState<Record<string, number>>({});
@@ -50,36 +50,37 @@ export default function MyPaths() {
   if (!mounted || entries.length === 0) return null;
 
   return (
-    <div style={{ width: "100%", maxWidth: 520, marginTop: 48 }}>
-      {/* Divider */}
-      <div
-        style={{
-          borderTop: "1px solid var(--border)",
-          paddingTop: 32,
-          marginBottom: 20,
-        }}
-      >
-        <h2
+    <div style={{ width: "100%", maxWidth: 520, marginTop: hideHeader ? 0 : 48 }}>
+      {!hideHeader && (
+        <div
           style={{
-            fontFamily: "var(--font-syne-var)",
-            color: "var(--text-primary)",
-            fontSize: 16,
-            fontWeight: 700,
-            marginBottom: 4,
+            borderTop: "1px solid var(--border)",
+            paddingTop: 32,
+            marginBottom: 20,
           }}
         >
-          Previous Paths
-        </h2>
-        <p
-          style={{
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-jetbrains-var)",
-            fontSize: 11,
-          }}
-        >
-          Stored in this browser · {entries.length} path{entries.length !== 1 ? "s" : ""}
-        </p>
-      </div>
+          <h2
+            style={{
+              fontFamily: "var(--font-syne-var)",
+              color: "var(--text-primary)",
+              fontSize: 16,
+              fontWeight: 700,
+              marginBottom: 4,
+            }}
+          >
+            Previous Paths
+          </h2>
+          <p
+            style={{
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-jetbrains-var)",
+              fontSize: 11,
+            }}
+          >
+            Stored in this browser · {entries.length} path{entries.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {entries.map((entry) => {

@@ -1,6 +1,50 @@
 import OpenAI from "openai";
 import type { UserProfile, CandidateArticle, BackgroundAnswers } from "@/types";
 
+export function buildSuggestionSystemPrompt(): string {
+  return `You are DevPath, a learning path curator for software developers.
+Given a developer's profile and feed data, suggest exactly 3 distinct, highly personalized
+learning path topics based on their actual bookmarks, followed tags, and reading history.
+Be specific — avoid generic topics like "JavaScript basics". Tailor each suggestion to THIS
+developer's actual interests and gaps. Respond ONLY with valid JSON.`;
+}
+
+export function buildSuggestionUserPrompt(
+  profile: UserProfile,
+  candidates: CandidateArticle[]
+): string {
+  // Compute top tag frequencies across the candidate pool
+  const tagFreq = new Map<string, number>();
+  candidates.forEach((c) =>
+    c.tags.forEach((t) => tagFreq.set(t, (tagFreq.get(t) ?? 0) + 1))
+  );
+  const topTags = [...tagFreq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([t, count]) => `${t} (${count})`);
+
+  return `Developer Profile:
+- Username: @${profile.username}
+- Tech Stack: ${profile.techStack.join(", ") || "Not specified"}
+- Followed Tags: ${profile.followedTags.join(", ") || "None"}
+- Bookmarks: ${profile.bookmarkIds.length} bookmarked articles
+- Top tags in their feed: ${topTags.join(", ")}
+- Total articles in feed: ${candidates.length}
+
+Suggest exactly 3 distinct learning path topics for this developer. Make them specific and tailored to their actual data above.
+
+Required JSON structure:
+{
+  "suggestions": [
+    {
+      "topic": "specific topic name (4–7 words)",
+      "description": "1–2 sentences explaining why this fits THIS developer based on their actual tags/bookmarks",
+      "emoji": "single relevant emoji"
+    }
+  ]
+}`;
+}
+
 export function createOpenAIClient(apiKey: string): OpenAI {
   return new OpenAI({ apiKey });
 }
