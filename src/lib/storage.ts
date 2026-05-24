@@ -1,4 +1,34 @@
+import LZString from "lz-string";
 import type { GeneratedPath, PathIndexEntry } from "@/types";
+
+/** Strip article summaries (not shown in UI) to minimise URL size, then compress. */
+export function encodePathForUrl(path: GeneratedPath): string {
+  const slim: GeneratedPath = {
+    ...path,
+    stages: path.stages.map((s) => ({
+      ...s,
+      articles: s.articles.map((a) => ({
+        ...a,
+        article: a.article
+          ? { ...a.article, summary: undefined }
+          : undefined,
+      })),
+    })),
+  };
+  return LZString.compressToEncodedURIComponent(JSON.stringify(slim));
+}
+
+export function decodePathFromUrl(encoded: string): GeneratedPath | null {
+  try {
+    const json = LZString.decompressFromEncodedURIComponent(encoded);
+    if (!json) return null;
+    const path = JSON.parse(json) as GeneratedPath;
+    if (!path.pathTitle || !Array.isArray(path.stages)) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
 
 const INDEX_KEY = "devpath:index";
 

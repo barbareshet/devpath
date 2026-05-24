@@ -8,7 +8,7 @@ import ProgressBar from "@/components/ProgressBar";
 import StageCard from "@/components/StageCard";
 import ShareBar from "@/components/ShareBar";
 import CircuitSidebar from "@/components/CircuitSidebar";
-import { loadPath, loadProgress, saveProgress, savePath, addToPathIndex } from "@/lib/storage";
+import { loadPath, loadProgress, saveProgress, savePath, addToPathIndex, decodePathFromUrl } from "@/lib/storage";
 import type { GeneratedPath } from "@/types";
 
 const RELATED_TOPIC_MAP: Record<string, string[]> = {
@@ -68,8 +68,8 @@ export default function PathPage() {
         const params = new URLSearchParams(window.location.search);
         const encoded = params.get("d");
         if (encoded) {
-          const decoded: GeneratedPath = JSON.parse(decodeURIComponent(atob(encoded)));
-          if (decoded.pathTitle && Array.isArray(decoded.stages)) {
+          const decoded = decodePathFromUrl(encoded);
+          if (decoded) {
             savePath(slug, decoded);
             addToPathIndex({
               slug,
@@ -79,7 +79,6 @@ export default function PathPage() {
               stageCount: decoded.stages.length,
             });
             stored = decoded;
-            // Clean the URL so it doesn't stay cluttered
             history.replaceState(null, "", `/path/${slug}`);
           }
         }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { GeneratedPath } from "@/types";
+import { encodePathForUrl } from "@/lib/storage";
 
 interface ShareBarProps {
   slug: string;
@@ -15,7 +16,7 @@ export default function ShareBar({ slug, pathTitle, path }: ShareBarProps) {
 
   useEffect(() => {
     try {
-      const encoded = btoa(encodeURIComponent(JSON.stringify(path)));
+      const encoded = encodePathForUrl(path);
       setUrl(`${window.location.origin}/path/${slug}?d=${encoded}`);
     } catch {
       setUrl(`${window.location.origin}/path/${slug}`);

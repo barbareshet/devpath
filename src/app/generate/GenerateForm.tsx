@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import LoadingMessages from "@/components/LoadingMessages";
 import { runGenerate } from "@/app/actions/runGenerate";
-import { savePath, addToPathIndex } from "@/lib/storage";
+import { savePath, addToPathIndex, encodePathForUrl } from "@/lib/storage";
 
 const PAT_STORAGE_KEY = "devpath:pat";
 const MAX_TOPICS = 3;
@@ -111,7 +111,7 @@ export default function GenerateForm({
         articleCount: path.stages.flatMap((s) => s.articles).length,
         stageCount: path.stages.length,
       });
-      const encoded = btoa(encodeURIComponent(JSON.stringify(path)));
+      const encoded = encodePathForUrl(path);
       router.push(`/path/${slug}?d=${encoded}`);
     } catch (err) {
       setError(
