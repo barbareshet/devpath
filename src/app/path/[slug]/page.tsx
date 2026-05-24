@@ -8,7 +8,7 @@ import ProgressBar from "@/components/ProgressBar";
 import StageCard from "@/components/StageCard";
 import ShareBar from "@/components/ShareBar";
 import CircuitSidebar from "@/components/CircuitSidebar";
-import { loadPath, loadProgress, saveProgress } from "@/lib/storage";
+import { loadPath, loadProgress, saveProgress, savePath, addToPathIndex } from "@/lib/storage";
 import type { GeneratedPath } from "@/types";
 
 const RELATED_TOPIC_MAP: Record<string, string[]> = {
@@ -59,7 +59,35 @@ export default function PathPage() {
   useEffect(() => {
     if (!slug) return;
     setMounted(true);
-    const stored = loadPath(slug);
+
+    let stored = loadPath(slug);
+
+    // If not in localStorage, try decoding from ?d= URL param
+    if (!stored) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const encoded = params.get("d");
+        if (encoded) {
+          const decoded: GeneratedPath = JSON.parse(decodeURIComponent(atob(encoded)));
+          if (decoded.pathTitle && Array.isArray(decoded.stages)) {
+            savePath(slug, decoded);
+            addToPathIndex({
+              slug,
+              pathTitle: decoded.pathTitle,
+              createdAt: new Date().toISOString(),
+              articleCount: decoded.stages.flatMap((s) => s.articles).length,
+              stageCount: decoded.stages.length,
+            });
+            stored = decoded;
+            // Clean the URL so it doesn't stay cluttered
+            history.replaceState(null, "", `/path/${slug}`);
+          }
+        }
+      } catch {
+        // Malformed data — fall through to "not found"
+      }
+    }
+
     setPath(stored);
     setProgress(loadProgress(slug));
   }, [slug]);
@@ -340,7 +368,7 @@ export default function PathPage() {
             marginTop: 32,
           }}
         >
-          <ShareBar slug={slug} pathTitle={path.pathTitle} />
+          <ShareBar slug={slug} pathTitle={path.pathTitle} path={path} />
         </div>
       </main>
     </div>

@@ -8,7 +8,10 @@ interface GeneratePageProps {
 
 export default async function GeneratePage({ searchParams }: GeneratePageProps) {
   const { topic } = await searchParams;
-  const defaultToken = process.env.DAILY_DEV_TOKEN ?? "";
+  const defaultToken =
+    process.env.NODE_ENV === "development"
+      ? (process.env.DAILY_DEV_TOKEN ?? "")
+      : "";
 
   return (
     <div style={{ backgroundColor: "var(--bg-base)", minHeight: "100vh" }}>

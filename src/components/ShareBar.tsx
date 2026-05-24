@@ -1,19 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { GeneratedPath } from "@/types";
 
 interface ShareBarProps {
   slug: string;
   pathTitle: string;
+  path: GeneratedPath;
 }
 
-export default function ShareBar({ slug, pathTitle }: ShareBarProps) {
+export default function ShareBar({ slug, pathTitle, path }: ShareBarProps) {
   const [copied, setCopied] = useState(false);
+  const [url, setUrl] = useState(`/path/${slug}`);
 
-  const url =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/path/${slug}`
-      : `/path/${slug}`;
+  useEffect(() => {
+    try {
+      const encoded = btoa(encodeURIComponent(JSON.stringify(path)));
+      setUrl(`${window.location.origin}/path/${slug}?d=${encoded}`);
+    } catch {
+      setUrl(`${window.location.origin}/path/${slug}`);
+    }
+  }, [slug, path]);
 
   const text = `Check out my personalized dev learning path: ${pathTitle}`;
 

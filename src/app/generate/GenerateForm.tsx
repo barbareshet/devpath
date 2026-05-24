@@ -84,6 +84,10 @@ export default function GenerateForm({
       setError("Please enter your daily.dev API token.");
       return;
     }
+    if (selected.length === 0) {
+      setError("Please select at least one focus topic.");
+      return;
+    }
     if (selected.includes("Other") && !customTopic.trim()) {
       setError("Please describe your custom topic.");
       return;
@@ -107,7 +111,8 @@ export default function GenerateForm({
         articleCount: path.stages.flatMap((s) => s.articles).length,
         stageCount: path.stages.length,
       });
-      router.push(`/path/${slug}`);
+      const encoded = btoa(encodeURIComponent(JSON.stringify(path)));
+      router.push(`/path/${slug}?d=${encoded}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong. Please try again."
@@ -162,7 +167,7 @@ export default function GenerateForm({
             lineHeight: 1.6,
           }}
         >
-          Enter your daily.dev API token and optionally focus on up to 3 topics.
+          Enter your daily.dev API token and select up to 3 topics to focus on.
         </p>
       </div>
 
@@ -216,7 +221,7 @@ export default function GenerateForm({
           >
             <label style={{ ...labelStyle, marginBottom: 0 }}>
               Focus topics{" "}
-              <span style={{ color: "var(--text-muted)" }}>(optional, up to 3)</span>
+              <span style={{ color: "var(--text-muted)" }}>(required, up to 3)</span>
             </label>
             {selected.length > 0 && (
               <span
